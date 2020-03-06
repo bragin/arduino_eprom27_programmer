@@ -1,11 +1,12 @@
+#include <Wire.h>    // Required for I2C communication
+#include <PCF8574.h>
+//#include <PCint.h>
+
+/** PCF8574 instance */
+PCF8574 expanders[2];
+
 #define TRUE 1
 #define FALSE 0
-
-/* 74HC595 control (address lines) */
-#define shiftLatchPin A1
-#define shiftClockPin A2
-#define shiftDataPin A0
-#define addressPinA10 13
 
 /* Data pins */
 #define dataB0 2
@@ -19,12 +20,10 @@
 
 /* Chip control */
 #define chipEnable A3
-#define outputEnable A4
-#define powerEnable A5 // For 27C16 and 27C32
+#define outputEnable A0
+#define powerEnable A1 // For 27C16 and 27C32
 #define readVoltageEnable 13 // For 27C16
 #define programVoltageEnableC16 9 // For 27C16
-#define programVoltageEnableC32 12 // For 27C32 and 27C512
-#define programVoltageEnableOther 11 // For other
 
 /* Voltage control (for programming chips) */
 #define voltageControl A6
@@ -59,13 +58,11 @@ void set_data (uint8_t data);
 uint8_t read_byte (uint16_t address);
 void write_byte (uint16_t address, uint8_t data);
 float get_voltage (void);
-void program_voltage_set (bool state);
-uint16_t gen_address (uint16_t address);
 void select_chip (chipType new_chip);
 
 chipType chip = NONE;
 Modes mode = WAIT;
-uint8_t log_enable = FALSE;
+uint8_t log_enable = TRUE;
 uint16_t start_address = 0x0000;
 uint16_t end_address = 0x0000;
 #define BUF_LEN 16
@@ -77,33 +74,35 @@ void message(const char* mes){
 }
 
 void setup() {
-  // 74HC595 (*2)
-  pinMode(shiftLatchPin, OUTPUT);
-  pinMode(shiftClockPin, OUTPUT);
-  pinMode(shiftDataPin, OUTPUT);
-  pinMode(addressPinA10, OUTPUT);
+  /* Start I2C bus and PCF8574 instance */
+  expanders[0].begin(0x38);
+  expanders[1].begin(0x39);
 
+  /* Setup PCF8574 pins as outputs */
+  for (uint8_t i=0;i<2;i++) {
+    for (uint8_t j=0;j<8;j++) {
+      expanders[i].pinMode(j, OUTPUT);
+      expanders[i].digitalWrite(j, LOW);
+    }
+  }
+    
   // Chip control
   pinMode(chipEnable, OUTPUT);
   pinMode(outputEnable, OUTPUT);
   pinMode(powerEnable, OUTPUT);
   pinMode(readVoltageEnable, OUTPUT);
   pinMode(programVoltageEnableC16, OUTPUT);
-  pinMode(programVoltageEnableC32, OUTPUT);
-  pinMode(programVoltageEnableOther, OUTPUT);
   digitalWrite(outputEnable, HIGH);
   digitalWrite(powerEnable, HIGH);
   digitalWrite(readVoltageEnable, HIGH);
   digitalWrite(programVoltageEnableC16, LOW);
-  digitalWrite(programVoltageEnableC32, LOW);
-  digitalWrite(programVoltageEnableOther, LOW);
   digitalWrite(chipEnable, LOW);
 
   // Data pins
   read_mode();
 
   Serial.begin(115200);
-  Serial.println("Arduino 27 Series programmer");
+  Serial.println("Arduino 27 Series EPROM programmer");
 }
 
 void loop() {
@@ -120,7 +119,11 @@ void loop() {
       digitalWrite(outputEnable, LOW);
       for (uint16_t i = start_address; i <= end_address; i++) {
         uint8_t data = read_byte(i);
-        Serial.write(&data, sizeof(data));
+        char buf[3];
+        //Serial.write(&data, sizeof(data));
+        snprintf(buf, sizeof(buf), "%02x", data);
+        //Serial.println(data, HEX);
+        Serial.println(buf);
         if (i == end_address) break; // Защита от переполнения uint16
       }
       digitalWrite(outputEnable, HIGH);
@@ -152,20 +155,20 @@ void loop() {
         for (uint16_t j = 0; j < BUF_LEN; j++) {
 					// Write byte
 					write_mode();
-					program_voltage_set(true);
+					digitalWrite(programVoltageEnableC16, true);
           write_byte((i + j), buf[j]);
-					program_voltage_set(false);
+					digitalWrite(programVoltageEnableC16, false);
 
 					// Verify byte
 					read_mode();
-					if (chip == C16) digitalWrite(readVoltageEnable, LOW);
+					digitalWrite(readVoltageEnable, LOW);
 					digitalWrite(chipEnable, LOW);
 					digitalWrite(outputEnable, LOW);
 					uint8_t verify = get_data();
 					digitalWrite(outputEnable, HIGH);
 					digitalWrite(chipEnable, HIGH);
-					if (chip == C16) digitalWrite(readVoltageEnable, HIGH);
-					if (buf[j] != virify){
+					digitalWrite(readVoltageEnable, HIGH);
+					if (buf[j] != verify){
 						Serial.print("Error on address ");
 						Serial.println(i + j);
 						mode = WAIT;
@@ -246,24 +249,6 @@ void select_chip (chipType new_chip) {
   }
 }
 
-
-void program_voltage_set (bool state) {
-  switch (chip) {
-    case C16:
-      digitalWrite(programVoltageEnableC16, state);
-      break;
-    case C32:
-    case C512:
-      digitalWrite(programVoltageEnableC32, state);
-      break;
-    case C64:
-    case C128:
-    case C256:
-    default:
-      digitalWrite(programVoltageEnableOther, state);
-  }
-}
-
 void write_mode (void) {
   pinMode(dataB0, OUTPUT);
   pinMode(dataB1, OUTPUT);
@@ -286,39 +271,43 @@ void read_mode (void) {
   pinMode(dataB7, INPUT_PULLUP);
 }
 
-uint16_t gen_address (uint16_t address) {
-  byte high = highByte(address);
-  byte low = lowByte(address);
-  switch (chip) {
-    case C16:
-      break;
-      if (mode == READ) {
-        high |= 1 << 3; // A11 (C32+) is Vpp for C16 (5v for read)
-      }
-      break;
-    case C64:
-    case C128:
-      if (mode == READ) {
-        high |= 1 << 6; // A14 (C256 and C512) is ~PGM for C64 and C128
-      }
-      break;
-    case C32:
-    case C256:
-    case C512:
-    default:
-      break;
-  }
-  return (high << 8) | low;
-}
-
 void set_address (uint16_t address) {
-  address = gen_address(address);
-  digitalWrite(shiftLatchPin, LOW);
   byte registerTwo = highByte(address);
   byte registerOne = lowByte(address);
-  shiftOut(shiftDataPin, shiftClockPin, MSBFIRST, registerTwo);
-  shiftOut(shiftDataPin, shiftClockPin, MSBFIRST, registerOne);
-  digitalWrite(shiftLatchPin, HIGH);
+
+  //Serial.print("Low address ");
+  //Serial.print(registerOne, HEX);
+  //Serial.print(" ");
+
+  for (int i=0;i<8;i++) {
+    uint8_t value = (registerOne >> i) & 1;
+
+    if (value == 0)
+      expanders[0].digitalWrite(i, LOW);
+    else
+      expanders[0].digitalWrite(i, HIGH);
+
+    //Serial.print(value, HEX);
+    //Serial.print(" ");
+  }
+
+  //Serial.print("High address ");
+  //Serial.print(registerTwo, HEX);
+  //Serial.print(" ");
+
+  for (int i=0;i<8;i++) {
+    uint8_t value = (registerTwo >> i) & 1;
+
+    if (value == 0)
+      expanders[1].digitalWrite(i, LOW);
+    else
+      expanders[1].digitalWrite(i, HIGH);
+
+    //Serial.print(value, HEX);
+    //Serial.print(" ");
+  }
+
+  //Serial.println("");
 }
 
 uint8_t get_data (void) {
