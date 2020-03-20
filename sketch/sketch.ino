@@ -127,11 +127,11 @@ void loop() {
       digitalWrite(outputEnable, LOW);
       for (uint16_t i = start_address; i <= end_address; i++) {
         uint8_t data = read_byte(i);
-
-        //Serial.write(&data, sizeof(data));
+        Serial.write(&data, sizeof(data));
+        /*
         if ((i % 32 == 0) && (i != 0)) Serial.println();
         snprintf(strbuf, sizeof(strbuf), "%02x", data);
-        Serial.print(strbuf);
+        Serial.print(strbuf);*/
         if (i == end_address) break; // Защита от переполнения uint16
       }
       digitalWrite(outputEnable, HIGH);

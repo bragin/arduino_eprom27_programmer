@@ -99,14 +99,23 @@ function parseMessage(buf) {
   // 3. Handling read command
   let readModeInd = str.indexOf('Read mode.');
   if (readModeInd !== -1) {
+    let bytesRead;
+
     let cmdIndex = str.indexOf(msgWaitCommands);
-    if (cmdIndex === -1) return 0;
+    if (cmdIndex === -1) {
+      bytesRead = buf.length - readModeInd - 12;
+      process.stdout.write(`Read ${bytesRead} bytes\r`);
+      return 0;
+    } else {
+      bytesRead = cmdIndex - readModeInd - 14;
+      console.log(`Read ${bytesRead} bytes`);
+    }
 
     // We have full buffer of hex data, save it to a file
     let romData = buf.slice(readModeInd + 12, cmdIndex - 2);
 
     //console.log('DATA <');
-    //console.log(romData.toString());
+    //console.log(romData.toString('hex'));
     //console.log('DATA >');
 
     fs.writeFile(romFile, romData, (err) => {
