@@ -20,10 +20,12 @@ PCF8574 expanders[2];
 
 /* Chip control */
 #define chipEnable A3
-#define outputEnable A0
-#define powerEnable A1 // For 27C16 and 27C32
+#define outputEnable A0 // Was A4
+#define powerEnable A1 // For 27C16 and 27C32 // Was A5
 #define readVoltageEnable 13 // For 27C16
 #define programVoltageEnableC16 9 // For 27C16
+#define programVoltageEnableC32 12 // For 27C32 and 27C512
+#define programVoltageEnableOther 11 // For other
 
 /* Voltage control (for programming chips) */
 #define voltageControl A6
@@ -58,6 +60,7 @@ void set_data (uint8_t data);
 uint8_t read_byte (uint16_t address);
 void write_byte (uint16_t address, uint8_t data);
 float get_voltage (void);
+void program_voltage_set (bool state);
 void select_chip (chipType new_chip);
 
 chipType chip = NONE;
@@ -67,6 +70,7 @@ uint16_t start_address = 0x0000;
 uint16_t end_address = 0x0000;
 #define BUF_LEN 16
 uint8_t buf[BUF_LEN];
+char strbuf[3];
 
 void message(const char* mes){
 	if (log_enable)
@@ -92,10 +96,14 @@ void setup() {
   pinMode(powerEnable, OUTPUT);
   pinMode(readVoltageEnable, OUTPUT);
   pinMode(programVoltageEnableC16, OUTPUT);
+  pinMode(programVoltageEnableC32, OUTPUT);
+  pinMode(programVoltageEnableOther, OUTPUT);
   digitalWrite(outputEnable, HIGH);
   digitalWrite(powerEnable, HIGH);
   digitalWrite(readVoltageEnable, HIGH);
   digitalWrite(programVoltageEnableC16, LOW);
+  digitalWrite(programVoltageEnableC32, LOW);
+  digitalWrite(programVoltageEnableOther, LOW);
   digitalWrite(chipEnable, LOW);
 
   // Data pins
@@ -119,17 +127,18 @@ void loop() {
       digitalWrite(outputEnable, LOW);
       for (uint16_t i = start_address; i <= end_address; i++) {
         uint8_t data = read_byte(i);
-        char buf[3];
+
         //Serial.write(&data, sizeof(data));
-        snprintf(buf, sizeof(buf), "%02x", data);
-        //Serial.println(data, HEX);
-        Serial.println(buf);
+        if (i % 32 == 0) Serial.println();
+        snprintf(strbuf, sizeof(strbuf), "%02x", data);
+        Serial.print(strbuf);
         if (i == end_address) break; // Защита от переполнения uint16
       }
       digitalWrite(outputEnable, HIGH);
       digitalWrite(chipEnable, HIGH);
       if (chip == C16) digitalWrite(readVoltageEnable, HIGH);
       mode = WAIT;
+      Serial.println();
       break;
     case WRITE:
       if (chip == NONE) {
@@ -155,19 +164,19 @@ void loop() {
         for (uint16_t j = 0; j < BUF_LEN; j++) {
 					// Write byte
 					write_mode();
-					digitalWrite(programVoltageEnableC16, true);
+					program_voltage_set(true);
           write_byte((i + j), buf[j]);
-					digitalWrite(programVoltageEnableC16, false);
+					program_voltage_set(false);
 
 					// Verify byte
 					read_mode();
-					digitalWrite(readVoltageEnable, LOW);
+					if (chip == C16) digitalWrite(readVoltageEnable, LOW);
 					digitalWrite(chipEnable, LOW);
 					digitalWrite(outputEnable, LOW);
 					uint8_t verify = get_data();
 					digitalWrite(outputEnable, HIGH);
 					digitalWrite(chipEnable, HIGH);
-					digitalWrite(readVoltageEnable, HIGH);
+					if (chip == C16) digitalWrite(readVoltageEnable, HIGH);
 					if (buf[j] != verify){
 						Serial.print("Error on address ");
 						Serial.println(i + j);
@@ -249,6 +258,23 @@ void select_chip (chipType new_chip) {
   }
 }
 
+void program_voltage_set (bool state) {
+  switch (chip) {
+    case C16:
+      digitalWrite(programVoltageEnableC16, state);
+      break;
+    case C32:
+    case C512:
+      digitalWrite(programVoltageEnableC32, state);
+      break;
+    case C64:
+    case C128:
+    case C256:
+    default:
+      digitalWrite(programVoltageEnableOther, state);
+  }
+}
+
 void write_mode (void) {
   pinMode(dataB0, OUTPUT);
   pinMode(dataB1, OUTPUT);
@@ -271,7 +297,34 @@ void read_mode (void) {
   pinMode(dataB7, INPUT_PULLUP);
 }
 
+uint16_t gen_address (uint16_t address) {
+  byte high = highByte(address);
+  byte low = lowByte(address);
+  switch (chip) {
+    case C16:
+      break;
+      if (mode == READ) {
+        high |= 1 << 3; // A11 (C32+) is Vpp for C16 (5v for read)
+      }
+      break;
+    case C64:
+    case C128:
+      if (mode == READ) {
+        high |= 1 << 6; // A14 (C256 and C512) is ~PGM for C64 and C128
+      }
+      break;
+    case C32:
+    case C256:
+    case C512:
+    default:
+      break;
+  }
+  return (high << 8) | low;
+}
+
 void set_address (uint16_t address) {
+  address = gen_address(address);
+
   byte registerTwo = highByte(address);
   byte registerOne = lowByte(address);
 
@@ -312,6 +365,17 @@ void set_address (uint16_t address) {
 
 uint8_t get_data (void) {
   uint8_t data = 0;
+  uint8_t pind = PIND; // 0 - 7
+  uint8_t pinb = PINB; // 8 - 13
+
+  // We start at D2, so shift out unnecessary bits
+  data = pind >> 2;
+
+  // Now add remaining bits from pinb
+  data |= (pinb & 1) << 6;
+  data |= ((pinb >> 2) & 1) << 7;
+
+  /* Optimized version of this:
   data |= digitalRead(dataB0) << 0;
   data |= digitalRead(dataB1) << 1;
   data |= digitalRead(dataB2) << 2;
@@ -320,6 +384,8 @@ uint8_t get_data (void) {
   data |= digitalRead(dataB5) << 5;
   data |= digitalRead(dataB6) << 6;
   data |= digitalRead(dataB7) << 7;
+  */
+  
   return data;
 }
 
