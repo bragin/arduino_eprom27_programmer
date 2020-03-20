@@ -145,7 +145,7 @@ void loop() {
         mode = WAIT;
         break;
       }
-      message("Write mode");
+      message("Write mode.");
       /*for (int i = start_address; i <= end_address; i++) {
         Serial.println(i, HEX);
         write_byte(i, 0x89);
@@ -155,7 +155,7 @@ void loop() {
         Serial.println(i);
         uint8_t count = Serial.readBytes((char*)buf, BUF_LEN);
         if (count != BUF_LEN) {
-          Serial.print("Error on block");
+          Serial.print("Error on block ");
           Serial.println(i);
           Serial.print("Received ");
           Serial.println(count);
@@ -187,7 +187,6 @@ void loop() {
         Serial.println(i);
         if (i == end_address) break;
       }
-      message("Write success.");
       mode = WAIT;
       break;
     case VOLTAGE:

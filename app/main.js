@@ -44,7 +44,11 @@ if (args.length != 3) {
     return;
   }
 
-  romFile = args[2];
+  if (opType === 'r') {
+    romFile = args[2];
+  } else {
+    romFile = fs.readFileSync(args[2], { encoding: 'binary' });
+  }
 }
 
 // Serial port
@@ -96,7 +100,7 @@ function parseMessage(buf) {
     return cmdIndex + msgWaitCommands.length + 2;
   }
 
-  // 3. Handling read command
+  // 3. Handle read command
   let readModeInd = str.indexOf('Read mode.');
   if (readModeInd !== -1) {
     let bytesRead;
@@ -112,7 +116,7 @@ function parseMessage(buf) {
     }
 
     // We have full buffer of hex data, save it to a file
-    let romData = buf.slice(readModeInd + 12, cmdIndex - 2);
+    const romData = buf.slice(readModeInd + 12, cmdIndex - 2);
 
     //console.log('DATA <');
     //console.log(romData.toString('hex'));
@@ -122,6 +126,69 @@ function parseMessage(buf) {
       if (err) throw err;
       console.log('The file has been saved!');
     });
+
+    return cmdIndex + msgWaitCommands.length + 2;
+  }
+
+  // 4. Handle write command
+  let completeIndex = str.indexOf('Complete block ');
+  if (completeIndex !== -1) {
+    let finishIndex = str.indexOf('\n', completeIndex + 15);
+    let index = parseInt(str.substring(completeIndex + 15, finishIndex), 10);
+
+    //console.log(`Block ${index} completed`);
+    let cmdIndex = str.indexOf(msgWaitCommands);
+    if (cmdIndex !== -1) {
+      // This is the end
+      console.log('Last block was written!')
+      return cmdIndex + msgWaitCommands.length + 2;
+    }
+
+    return finishIndex + 1;
+  }
+
+  let writeBlockInd = str.indexOf('Write block ');
+  if (writeBlockInd !== -1) {
+    let finishIndex = str.indexOf('\n', writeBlockInd + 12);
+
+    // Get write block index
+    let offset = parseInt(str.substring(writeBlockInd + 12, finishIndex), 10);
+    process.stdout.write(`Writing block ${offset}\r`);
+    //console.log(`Writing block ${offset}\r`);
+
+    // Send it!
+    const romData = romFile.slice(offset, offset + 16);
+    myPort.write(romData, 'binary');
+
+    // And consume this part
+    return finishIndex + 1;
+  }
+
+  // 5. Handle errors during write
+  let errorBlockInd = str.indexOf('Error on block ');
+  if (errorBlockInd !== -1) {
+    let cmdIndex = str.indexOf(msgWaitCommands);
+    if (cmdIndex === -1) return 0;
+
+    let finishIndex = str.indexOf('\n', errorBlockInd + 15);
+
+    // Get write block index
+    let index = parseInt(str.substring(errorBlockInd + 15, finishIndex), 10);
+    console.log(`Error on block ${index}`);
+
+    return cmdIndex + msgWaitCommands.length + 2;
+  }
+
+  errorBlockInd = str.indexOf('Error on address ');
+  if (errorBlockInd !== -1) {
+    let cmdIndex = str.indexOf(msgWaitCommands);
+    if (cmdIndex === -1) return 0;
+
+    let finishIndex = str.indexOf('\n', errorBlockInd + 15);
+
+    // Get address error
+    let address = parseInt(str.substring(errorBlockInd + 15, finishIndex), 10);
+    console.log(`Error on address ${index}`);
 
     return cmdIndex + msgWaitCommands.length + 2;
   }
@@ -145,7 +212,7 @@ function saveLatestData(data) {
       // Cut off the consumed data from the buffer
       portBuffer = portBuffer.slice(parsedBytes);
       // Parse the remaining data during next loop iteration
-      console.log('Remaining data: ', portBuffer);
+      //console.log('Remaining data: ', portBuffer.toString());
     } else {
       // Buffer was consumed entirely and there is no additional data remaining
       portBuffer = Buffer.alloc(0);
