@@ -1,0 +1,19 @@
+{
+  "name": "ROM27",
+  "version": "1.0.0",
+  "description": "27 Series EPROM Programmer",
+  "main": "main.js",
+  "scripts": {
+    "start": "node_modules/.bin/nodemon main.js"
+  },
+  "keywords": [],
+  "author": "Aleksey Bragin",
+  "license": "",
+  "devDependencies": {
+    "nodemon": ""
+  },
+  "dependencies": {
+    "nconf": "",
+    "serialport": ""
+  }
+}
