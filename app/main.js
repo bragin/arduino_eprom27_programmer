@@ -1,4 +1,5 @@
 'use strict';
+const fs = require('fs');
 const nconf = require('nconf');
 const SerialPort = require('serialport');
 
@@ -7,6 +8,7 @@ nconf.argv()
 
 let chipType;
 let opType;
+let romFile;
 let args = process.argv.slice(2);
 if (args.length != 3) {
   console.log('Usage: `node main.js T M filename.bin`, where T is 16-512 and M is either r or w');
@@ -41,6 +43,8 @@ if (args.length != 3) {
     console.error(`Unrecognized operation mode ${opType}, exiting`);
     return;
   }
+
+  romFile = args[2];
 }
 
 // Serial port
@@ -98,12 +102,17 @@ function parseMessage(buf) {
     let cmdIndex = str.indexOf(msgWaitCommands);
     if (cmdIndex === -1) return 0;
 
-    // We have full buffer of hex data, save it
+    // We have full buffer of hex data, save it to a file
     let romData = buf.slice(readModeInd + 12, cmdIndex - 2);
 
-    console.log('DATA <');
-    console.log(romData.toString());
-    console.log('DATA >');
+    //console.log('DATA <');
+    //console.log(romData.toString());
+    //console.log('DATA >');
+
+    fs.writeFile(romFile, romData, (err) => {
+      if (err) throw err;
+      console.log('The file has been saved!');
+    });
 
     return cmdIndex + msgWaitCommands.length + 2;
   }
