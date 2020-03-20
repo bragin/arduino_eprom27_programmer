@@ -129,7 +129,7 @@ void loop() {
         uint8_t data = read_byte(i);
 
         //Serial.write(&data, sizeof(data));
-        if (i % 32 == 0) Serial.println();
+        if ((i % 32 == 0) && (i != 0)) Serial.println();
         snprintf(strbuf, sizeof(strbuf), "%02x", data);
         Serial.print(strbuf);
         if (i == end_address) break; // Защита от переполнения uint16
@@ -223,33 +223,33 @@ void select_chip (chipType new_chip) {
       digitalWrite(powerEnable, LOW);
       chip = new_chip;
       end_address = 0x07ff;
-			message("Select 27C16 chip.");
+      message("Selected 27C16 chip.");
       break;
     case C32:
       digitalWrite(powerEnable, LOW);
       chip = new_chip;
       end_address = 0x0fff;
-			message("Select 27C32 chip.");
+      message("Selected 27C32 chip.");
       break;
     case C64:
       chip = new_chip;
       end_address = 0x1fff;
-			message("Select 27C64 chip.");
+      message("Selected 27C64 chip.");
       break;
     case C128:
       chip = new_chip;
       end_address = 0x3fff;
-			message("Select 27C128 chip.");
+      message("Selected 27C128 chip.");
       break;
     case C256:
       chip = new_chip;
       end_address = 0x7fff;
-			message("Select 27C256 chip.");
+      message("Selected 27C256 chip.");
       break;
     case C512:
       chip = C512;
       end_address = 0xffff;
-			message("Select 27C512 chip.");
+      message("Selected 27C512 chip.");
       break;
     default:
       chip = NONE;
