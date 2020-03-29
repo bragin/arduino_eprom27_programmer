@@ -21,7 +21,7 @@ PCF8574 expanders[2];
 /* Chip control */
 #define chipEnable A3
 #define outputEnable A0 // Was A4
-#define powerEnable A1 // For 27C16 and 27C32 // Was A5
+#define powerEnable A2 // For 27C16 and 27C32 // Was A5
 #define readVoltageEnable 13 // For 27C16
 #define programVoltageEnableC16 9 // For 27C16
 #define programVoltageEnableC32 12 // For 27C32 and 27C512
@@ -86,8 +86,8 @@ void setup() {
   for (uint8_t i=0;i<2;i++) {
     for (uint8_t j=0;j<8;j++) {
       expanders[i].pinMode(j, OUTPUT);
-      expanders[i].digitalWrite(j, LOW);
     }
+    expanders[i].clear();
   }
     
   // Chip control
@@ -128,6 +128,7 @@ void loop() {
       for (uint16_t i = start_address; i <= end_address; i++) {
         uint8_t data = read_byte(i);
         Serial.write(&data, sizeof(data));
+        //Serial.println(i, HEX);
         /*
         if ((i % 32 == 0) && (i != 0)) Serial.println();
         snprintf(strbuf, sizeof(strbuf), "%02x", data);
@@ -327,9 +328,19 @@ void set_address (uint16_t address) {
   byte registerTwo = highByte(address);
   byte registerOne = lowByte(address);
 
-  //Serial.print("Low address ");
-  //Serial.print(registerOne, HEX);
-  //Serial.print(" ");
+  expanders[0].write(registerOne);
+  expanders[1].write(registerTwo);
+
+  /*Serial.print("1 and 2: ");
+  Serial.print(registerOne, HEX);
+  Serial.print(" ");
+  Serial.print(registerTwo, HEX);
+
+  Serial.println("");*/
+
+  /* Serial.print("Low address ");
+  Serial.print(registerOne, HEX);
+  Serial.print(" ");
 
   for (int i=0;i<8;i++) {
     uint8_t value = (registerOne >> i) & 1;
@@ -339,13 +350,13 @@ void set_address (uint16_t address) {
     else
       expanders[0].digitalWrite(i, HIGH);
 
-    //Serial.print(value, HEX);
-    //Serial.print(" ");
+    Serial.print(value, HEX);
+    Serial.print(" ");
   }
 
-  //Serial.print("High address ");
-  //Serial.print(registerTwo, HEX);
-  //Serial.print(" ");
+  Serial.print("High address ");
+  Serial.print(registerTwo, HEX);
+  Serial.print(" ");
 
   for (int i=0;i<8;i++) {
     uint8_t value = (registerTwo >> i) & 1;
@@ -355,11 +366,11 @@ void set_address (uint16_t address) {
     else
       expanders[1].digitalWrite(i, HIGH);
 
-    //Serial.print(value, HEX);
-    //Serial.print(" ");
+    Serial.print(value, HEX);
+    Serial.print(" ");
   }
 
-  //Serial.println("");
+  Serial.println(""); */
 }
 
 uint8_t get_data (void) {
@@ -382,8 +393,7 @@ uint8_t get_data (void) {
   data |= digitalRead(dataB4) << 4;
   data |= digitalRead(dataB5) << 5;
   data |= digitalRead(dataB6) << 6;
-  data |= digitalRead(dataB7) << 7;
-  */
+  data |= digitalRead(dataB7) << 7;*/
   
   return data;
 }
