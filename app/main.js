@@ -69,14 +69,13 @@ function showPortOpen() {
 }
 
 function parseMessage(buf) {
-  const msgWaitCommands = 'Wait commands...';
-  let str = buf.toString();
+  const msgWaitCommands = 'Wait commands...\r\n';
 
   // 1. Selecting chip
-  let chipSelectIndex = str.indexOf('Chip not selected!');
+  let chipSelectIndex = buf.indexOf('Chip not selected!');
   if (chipSelectIndex !== -1) {
     // Select chip
-    let cmdIndex = str.indexOf(msgWaitCommands);
+    let cmdIndex = buf.indexOf(msgWaitCommands);
     if (cmdIndex === -1)
       return 0;
 
@@ -87,11 +86,11 @@ function parseMessage(buf) {
   }
 
   // 2. Chip select acknowledge and operation mode set
-  let chipSelectAck = str.indexOf('Selected ');
+  let chipSelectAck = buf.indexOf('Selected ');
   if (chipSelectAck !== -1) {
-    let chipSelectFinish = str.indexOf(' chip.', chipSelectAck)
-    console.log(`Chip ${str.substring(chipSelectAck + 9, chipSelectFinish)}`);
-    let cmdIndex = str.indexOf(msgWaitCommands);
+    let chipSelectFinish = buf.indexOf(' chip.', chipSelectAck)
+    console.log(`Chip ${buf.slice(chipSelectAck + 9, chipSelectFinish)}`);
+    let cmdIndex = buf.indexOf(msgWaitCommands);
     if (cmdIndex === -1) return 0;
 
     // Send read or write operation request
@@ -101,11 +100,11 @@ function parseMessage(buf) {
   }
 
   // 3. Handle read command
-  let readModeInd = str.indexOf('Read mode.');
+  let readModeInd = buf.indexOf('Read mode.');
   if (readModeInd !== -1) {
     let bytesRead;
 
-    let cmdIndex = str.indexOf(msgWaitCommands);
+    let cmdIndex = buf.indexOf(msgWaitCommands);
     if (cmdIndex === -1) {
       bytesRead = buf.length - readModeInd - 12;
       process.stdout.write(`Read ${bytesRead} bytes\r`);
@@ -131,13 +130,13 @@ function parseMessage(buf) {
   }
 
   // 4. Handle write command
-  let completeIndex = str.indexOf('Complete block ');
+  let completeIndex = buf.indexOf('Complete block ');
   if (completeIndex !== -1) {
-    let finishIndex = str.indexOf('\n', completeIndex + 15);
-    let index = parseInt(str.substring(completeIndex + 15, finishIndex), 10);
+    let finishIndex = buf.indexOf('\n', completeIndex + 15);
+    let index = parseInt(buf.slice(completeIndex + 15, finishIndex), 10);
 
     //console.log(`Block ${index} completed`);
-    let cmdIndex = str.indexOf(msgWaitCommands);
+    let cmdIndex = buf.indexOf(msgWaitCommands);
     if (cmdIndex !== -1) {
       // This is the end
       console.log('Last block was written!')
@@ -147,12 +146,12 @@ function parseMessage(buf) {
     return finishIndex + 1;
   }
 
-  let writeBlockInd = str.indexOf('Write block ');
+  let writeBlockInd = buf.indexOf('Write block ');
   if (writeBlockInd !== -1) {
-    let finishIndex = str.indexOf('\n', writeBlockInd + 12);
+    let finishIndex = buf.indexOf('\n', writeBlockInd + 12);
 
     // Get write block index
-    let offset = parseInt(str.substring(writeBlockInd + 12, finishIndex), 10);
+    let offset = parseInt(buf.slice(writeBlockInd + 12, finishIndex), 10);
     process.stdout.write(`Writing block ${offset}\r`);
     //console.log(`Writing block ${offset}\r`);
 
@@ -165,29 +164,29 @@ function parseMessage(buf) {
   }
 
   // 5. Handle errors during write
-  let errorBlockInd = str.indexOf('Error on block ');
+  let errorBlockInd = buf.indexOf('Error on block ');
   if (errorBlockInd !== -1) {
-    let cmdIndex = str.indexOf(msgWaitCommands);
+    let cmdIndex = buf.indexOf(msgWaitCommands);
     if (cmdIndex === -1) return 0;
 
-    let finishIndex = str.indexOf('\n', errorBlockInd + 15);
+    let finishIndex = buf.indexOf('\n', errorBlockInd + 15);
 
     // Get write block index
-    let index = parseInt(str.substring(errorBlockInd + 15, finishIndex), 10);
+    let index = parseInt(buf.slice(errorBlockInd + 15, finishIndex), 10);
     console.log(`Error on block ${index}`);
 
     return cmdIndex + msgWaitCommands.length + 2;
   }
 
-  errorBlockInd = str.indexOf('Error on address ');
+  errorBlockInd = buf.indexOf('Error on address ');
   if (errorBlockInd !== -1) {
-    let cmdIndex = str.indexOf(msgWaitCommands);
+    let cmdIndex = buf.indexOf(msgWaitCommands);
     if (cmdIndex === -1) return 0;
 
-    let finishIndex = str.indexOf('\n', errorBlockInd + 15);
+    let finishIndex = buf.indexOf('\n', errorBlockInd + 15);
 
     // Get address error
-    let address = parseInt(str.substring(errorBlockInd + 15, finishIndex), 10);
+    let address = parseInt(buf.slice(errorBlockInd + 15, finishIndex), 10);
     console.log(`Error on address ${index}`);
 
     return cmdIndex + msgWaitCommands.length + 2;
